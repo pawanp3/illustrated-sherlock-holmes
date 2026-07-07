@@ -13,7 +13,7 @@ Each edition comes in two formats:
 
 Every book contains the full, unabridged public-domain text (from Project Gutenberg).
 
-**📖 Read online:** `https://<username>.github.io/illustrated-sherlock-holmes/`
+**📖 Read online → https://pawanp3.github.io/illustrated-sherlock-holmes/**
 
 Files are numbered in publication order, which is also the recommended reading order.
 
