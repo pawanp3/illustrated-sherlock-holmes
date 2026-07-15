@@ -1,0 +1,11 @@
+# Every change requires review from the repository owner.
+# Combined with branch protection (require_code_owner_reviews), this means a
+# community PR cannot merge without @pawanp3 approving it — and any change to a
+# .html page, an EPUB, a workflow, or repo config gets reviewed line-by-line.
+*                       @pawanp3
+
+# Called out explicitly so these are never merged without owner review:
+*.html                  @pawanp3
+*.epub                  @pawanp3
+/.github/               @pawanp3
+/scripts/               @pawanp3

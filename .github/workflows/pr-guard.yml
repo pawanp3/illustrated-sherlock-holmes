@@ -1,0 +1,95 @@
+name: pr-guard
+
+# Guards community pull requests. See CONTRIBUTING.md.
+# - path-guard: BLOCKS a non-maintainer PR that changes anything other than the
+#   served images (books/*/*/images/*.jpg and books/*/*/cover.jpg). This is the
+#   enforced "restrict community PRs to images only" policy.
+# - image-report: NON-BLOCKING. Surfaces any embedded metadata/payloads found in
+#   the images a PR changes, so the maintainer can see it before merging and
+#   re-encode with scripts/sanitize-images.sh.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  path-guard:
+    name: path-guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce community path allowlist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          ASSOC: ${{ github.event.pull_request.author_association }}
+        run: |
+          set -euo pipefail
+          # Maintainers (repo owner / members / collaborators) are not restricted.
+          case "$ASSOC" in
+            OWNER|MEMBER|COLLABORATOR)
+              echo "Author association is $ASSOC (maintainer). Path allowlist not enforced."
+              exit 0 ;;
+          esac
+          echo "Author association is $ASSOC (community). Enforcing image-only allowlist."
+          files="$(gh pr diff "$PR" --repo "$REPO" --name-only)"
+          echo "Changed files:"
+          printf '%s\n' "$files"
+          bad=0
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              books/*/*/images/*.jpg) ;;   # a served scene image
+              books/*/*/cover.jpg)    ;;   # a served cover image
+              *)
+                echo "::error file=$f::Community PRs may only change books/*/*/images/*.jpg or books/*/*/cover.jpg (got: $f)"
+                bad=1 ;;
+            esac
+          done <<< "$files"
+          if [ "$bad" -ne 0 ]; then
+            echo "This PR changes files outside the community allowlist. See CONTRIBUTING.md."
+            exit 1
+          fi
+          echo "OK: every changed path is within the community image allowlist."
+
+  image-report:
+    name: image-report
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+      - name: Report embedded metadata in changed images
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq libimage-exiftool-perl >/dev/null
+          files="$(gh pr diff "$PR" --repo "$REPO" --name-only || true)"
+          any=0
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              *.jpg|*.jpeg|*.JPG|*.JPEG) ;;
+              *) continue ;;
+            esac
+            [ -f "$f" ] || continue
+            any=1
+            echo "== $f =="
+            # -a all tags, -G group names; excludes only the trivial File: group noise.
+            meta="$(exiftool -a -G1 -s "$f" | grep -viE '^\[(File|ExifTool|Composite)\]' || true)"
+            if [ -n "$meta" ]; then
+              echo "::warning file=$f::This image carries embedded metadata. Re-encode with scripts/sanitize-images.sh before merging."
+              printf '%s\n' "$meta"
+            else
+              echo "No embedded EXIF/IPTC/XMP metadata found."
+            fi
+          done <<< "$files"
+          if [ "$any" -eq 0 ]; then echo "No image files changed in this PR."; fi
+          # Informational only — never fails the build.
+          exit 0
