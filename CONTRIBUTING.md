@@ -43,3 +43,5 @@ differences from the final re-encode are expected.
   source PNGs are **not** in this repo.
 - `main` is protected: all changes go through a reviewed PR with the `pr-guard`
   check passing.
+
+<!-- pr-guard verification, will be reverted -->
